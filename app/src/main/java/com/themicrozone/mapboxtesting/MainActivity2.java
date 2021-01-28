@@ -5,10 +5,12 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.view.Gravity;
@@ -37,6 +39,9 @@ import com.mapbox.mapboxsdk.geometry.LatLng;
 import com.mapbox.mapboxsdk.geometry.LatLngBounds;
 import com.mapbox.mapboxsdk.location.LocationComponent;
 import com.mapbox.mapboxsdk.location.LocationComponentActivationOptions;
+import com.mapbox.mapboxsdk.location.LocationComponentOptions;
+import com.mapbox.mapboxsdk.location.OnCameraTrackingChangedListener;
+import com.mapbox.mapboxsdk.location.OnLocationClickListener;
 import com.mapbox.mapboxsdk.location.modes.CameraMode;
 import com.mapbox.mapboxsdk.location.modes.RenderMode;
 import com.mapbox.mapboxsdk.maps.MapView;
@@ -63,7 +68,8 @@ import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.iconIgnorePlacem
 import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.visibility;
 import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.iconImage;
 
-public class MainActivity2 extends AppCompatActivity implements PermissionsListener, OnMapReadyCallback {
+public class MainActivity2 extends AppCompatActivity implements PermissionsListener, OnMapReadyCallback,
+        OnLocationClickListener, OnCameraTrackingChangedListener {
 
     private static final String DROPPED_MARKER_LAYER_ID = "DROPPED_MARKER_LAYER_ID";
     private MapView mapView;
@@ -73,27 +79,33 @@ public class MainActivity2 extends AppCompatActivity implements PermissionsListe
     private ImageView hoveringMarker;
     private Layer droppedMarkerLayer;
 
-    private ImageView btnTraffic;
 
+
+
+    private LocationComponent locationComponent;
+    private boolean isInTrackingMode;
+
+
+
+    private ImageView btnTraffic;
     private TrafficPlugin trafficPlugin;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-// Mapbox access token is configured here. This needs to be called either in your application
-// object or in the same activity which contains the mapview.
+
         Mapbox.getInstance(this, getString(R.string.mapbox_access_token));
 
-// This contains the MapView in XML and needs to be called after the access token is configured.
+
         setContentView(R.layout.activity_main2);
 
-// Initialize the mapboxMap view
         mapView = findViewById(R.id.mapView);
         mapView.onCreate(savedInstanceState);
         mapView.getMapAsync(this);
 
 
+        //by clicking traffic button
         btnTraffic = findViewById(R.id.btntrafic);
         btnTraffic.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -109,6 +121,7 @@ public class MainActivity2 extends AppCompatActivity implements PermissionsListe
             }
         });
 
+        //by clicking night mode
         findViewById(R.id.image_might_mode).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -125,7 +138,6 @@ public class MainActivity2 extends AppCompatActivity implements PermissionsListe
         });
 
 
-
     }
 
 
@@ -137,109 +149,9 @@ public class MainActivity2 extends AppCompatActivity implements PermissionsListe
             public void onStyleLoaded(@NonNull final Style style) {
 
                 trafficPlugin = new TrafficPlugin(mapView, mapboxMap, style);
-
-                enableLocationPlugin(style);
-
-// Toast instructing user to tap on the mapboxMap
-                Toast.makeText(
-                        MainActivity2.this,
-                        "R.string.move_map_instruction", Toast.LENGTH_SHORT).show();
-
-// When user is still picking a location, we hover a marker above the mapboxMap in the center.
-// This is done by using an image view with the default marker found in the SDK. You can
-// swap out for your own marker image, just make sure it matches up with the dropped marker.
-                hoveringMarker = new ImageView(MainActivity2.this);
-                hoveringMarker.setImageResource(R.drawable.ic_baseline_place_24);
-                FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT,
-                        ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
-                hoveringMarker.setLayoutParams(params);
-                mapView.addView(hoveringMarker);
-
-// Initialize, but don't show, a SymbolLayer for the marker icon which will represent a selected location.
-                initDroppedMarker(style);
-
-// Button for user to drop marker or to pick marker back up.
-                selectLocationButton = findViewById(R.id.select_location_button);
-                selectLocationButton.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View view) {
-                        if (hoveringMarker.getVisibility() == VISIBLE) {
-
-// Use the map target's coordinates to make a reverse geocoding search
-                            final LatLng mapTargetLatLng = mapboxMap.getCameraPosition().target;
-
-// Hide the hovering red hovering ImageView marker
-                            hoveringMarker.setVisibility(View.INVISIBLE);
-
-// Transform the appearance of the button to become the cancel button
-                            selectLocationButton.setBackgroundColor(
-                                    ContextCompat.getColor(MainActivity2.this, R.color.purple_500));
-                            selectLocationButton.setText("getString(R.string.location_picker_select_location_button_cancel)");
-
-// Show the SymbolLayer icon to represent the selected map location
-                            if (style.getLayer(DROPPED_MARKER_LAYER_ID) != null) {
-                                GeoJsonSource source = style.getSourceAs("dropped-marker-source-id");
-                                if (source != null) {
-                                    source.setGeoJson(Point.fromLngLat(mapTargetLatLng.getLongitude(), mapTargetLatLng.getLatitude()));
-                                }
-                                droppedMarkerLayer = style.getLayer(DROPPED_MARKER_LAYER_ID);
-                                if (droppedMarkerLayer != null) {
-                                    droppedMarkerLayer.setProperties(visibility(Property.VISIBLE));
-                                }
-                            }
-
-// Use the map camera target's coordinates to make a reverse geocoding search
-                            reverseGeocode(Point.fromLngLat(mapTargetLatLng.getLongitude(), mapTargetLatLng.getLatitude()));
-
-                        } else {
-
-// Switch the button appearance back to select a location.
-                            selectLocationButton.setBackgroundColor(
-                                    ContextCompat.getColor(MainActivity2.this, R.color.purple_700));
-                            selectLocationButton.setText("getString(R.string.location_picker_select_location_button_select)");
-
-// Show the red hovering ImageView marker
-                            hoveringMarker.setVisibility(VISIBLE);
-
-// Hide the selected location SymbolLayer
-                            droppedMarkerLayer = style.getLayer(DROPPED_MARKER_LAYER_ID);
-                            if (droppedMarkerLayer != null) {
-                                droppedMarkerLayer.setProperties(visibility(Property.NONE));
-                            }
-                        }
-                    }
-                });
+                enableLocationComponent(style);
             }
         });
-    }
-
-    /*  private void initDroppedMarker(@NonNull Style loadedMapStyle) {
-  // Add the marker image to map
-          loadedMapStyle.addImage("dropped-icon-image", BitmapFactory.decodeResource(
-                  getResources(), R.drawable.ic_baseline_place_24));
-          loadedMapStyle.addSource(new GeoJsonSource("dropped-marker-source-id"));
-          loadedMapStyle.addLayer(new SymbolLayer(DROPPED_MARKER_LAYER_ID,
-                  "dropped-marker-source-id").withProperties(
-                  iconImage("dropped-icon-image"),
-                  visibility(Property.NONE),
-                  iconAllowOverlap(true),
-                  iconIgnorePlacement(true)
-          ));
-      }
-  */
-    private void initDroppedMarker(@NonNull Style loadedMapStyle) {
-// Add the marker image to map
-        loadedMapStyle.addImage("dropped-icon-image", BitmapFactory.decodeResource(
-                getResources(), R.drawable.ic_marker_red));
-        loadedMapStyle.addSource(new GeoJsonSource("dropped-marker-source-id"));
-        loadedMapStyle.addLayer(new SymbolLayer(DROPPED_MARKER_LAYER_ID,
-                "dropped-marker-source-id").withProperties(
-                iconImage("dropped-icon-image"),
-                visibility(Property.NONE),
-                iconAllowOverlap(true),
-                iconIgnorePlacement(true)
-        ));
     }
 
 
@@ -266,53 +178,67 @@ public class MainActivity2 extends AppCompatActivity implements PermissionsListe
         }
     }
 
+    @SuppressWarnings( {"MissingPermission"})
+    private void enableLocationComponent(@NonNull Style loadedMapStyle) {
+// Check if permissions are enabled and if not request
+        if (PermissionsManager.areLocationPermissionsGranted(this)) {
 
-    private void reverseGeocode(final Point point) {
-        try {
-            MapboxGeocoding client = MapboxGeocoding.builder()
-                    .accessToken(getString(R.string.mapbox_access_token))
-                    .query(Point.fromLngLat(point.longitude(), point.latitude()))
-                    .geocodingTypes(GeocodingCriteria.TYPE_ADDRESS)
+// Create and customize the LocationComponent's options
+            LocationComponentOptions customLocationComponentOptions = LocationComponentOptions.builder(this)
+                    .elevation(5)
+                    .accuracyAlpha(.6f)
+                    .accuracyColor(Color.RED)
+                    .foregroundDrawable(R.drawable.ic_baseline_place_24)
                     .build();
 
-            client.enqueueCall(new Callback<GeocodingResponse>() {
+// Get an instance of the component
+            locationComponent = mapboxMap.getLocationComponent();
+
+            LocationComponentActivationOptions locationComponentActivationOptions =
+                    LocationComponentActivationOptions.builder(this, loadedMapStyle)
+                            .locationComponentOptions(customLocationComponentOptions)
+                            .build();
+
+// Activate with options
+            locationComponent.activateLocationComponent(locationComponentActivationOptions);
+
+// Enable to make component visible
+            locationComponent.setLocationComponentEnabled(true);
+
+// Set the component's camera mode
+            locationComponent.setCameraMode(CameraMode.TRACKING);
+
+// Set the component's render mode
+            locationComponent.setRenderMode(RenderMode.COMPASS);
+
+// Add the location icon click listener
+            locationComponent.addOnLocationClickListener(this);
+
+// Add the camera tracking listener. Fires if the map camera is manually moved.
+            locationComponent.addOnCameraTrackingChangedListener(this);
+
+            findViewById(R.id.select_location_button).setOnClickListener(new View.OnClickListener() {
                 @Override
-                public void onResponse(Call<GeocodingResponse> call, Response<GeocodingResponse> response) {
-
-                    if (response.body() != null) {
-                        List<CarmenFeature> results = response.body().features();
-                        if (results.size() > 0) {
-                            CarmenFeature feature = results.get(0);
-
-// If the geocoder returns a result, we take the first in the list and show a Toast with the place name.
-                            mapboxMap.getStyle(new Style.OnStyleLoaded() {
-                                @Override
-                                public void onStyleLoaded(@NonNull Style style) {
-                                    if (style.getLayer(DROPPED_MARKER_LAYER_ID) != null) {
-                                        Toast.makeText(MainActivity2.this,
-                                                String.format("getString(R.string.location_picker_place_name_result)",
-                                                        feature.placeName()), Toast.LENGTH_SHORT).show();
-                                    }
-                                }
-                            });
-
-                        } else {
-                            Toast.makeText(MainActivity2.this,
-                                    "getString(R.string.location_picker_dropped_marker_snippet_no_results)", Toast.LENGTH_SHORT).show();
-                        }
+                public void onClick(View view) {
+                    if (!isInTrackingMode) {
+                        isInTrackingMode = true;
+                        locationComponent.setCameraMode(CameraMode.TRACKING);
+                        locationComponent.zoomWhileTracking(16f);
+                        Toast.makeText(MainActivity2.this, getString(R.string.tracking_enabled),
+                                Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(MainActivity2.this, getString(R.string.tracking_already_enabled),
+                                Toast.LENGTH_SHORT).show();
                     }
                 }
-
-                @Override
-                public void onFailure(Call<GeocodingResponse> call, Throwable throwable) {
-                    Timber.e("Geocoding Failure: %s", throwable.getMessage());
-                }
             });
-        } catch (ServicesException servicesException) {
-            Timber.e("Error geocoding: %s", servicesException.toString());
-            servicesException.printStackTrace();
+        } else {
+            permissionsManager = new PermissionsManager(this);
+            permissionsManager.requestLocationPermissions(this);
         }
     }
+
+
 
     @SuppressWarnings({"MissingPermission"})
     private void enableLocationPlugin(@NonNull Style loadedMapStyle) {
@@ -379,6 +305,29 @@ public class MainActivity2 extends AppCompatActivity implements PermissionsListe
         mapView.onDestroy();
     }
 
+
+
+
+    @SuppressLint("StringFormatInvalid")
+    @SuppressWarnings( {"MissingPermission"})
+    @Override
+    public void onLocationComponentClick() {
+        if (locationComponent.getLastKnownLocation() != null) {
+            Toast.makeText(this, String.format(getString(R.string.current_location),
+                    locationComponent.getLastKnownLocation().getLatitude(),
+                    locationComponent.getLastKnownLocation().getLongitude()), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @Override
+    public void onCameraTrackingDismissed() {
+        isInTrackingMode = false;
+    }
+
+    @Override
+    public void onCameraTrackingChanged(int currentMode) {
+
+    }
 }
 
 
