@@ -1,7 +1,9 @@
 <resources>
     <string name="app_name">MapBoxTesting</string>
-    <string name="mapbox_access_token">pk.eyJ1IjoiYW1pcm1pY3Jvem9uZSIsImEiOiJja2tkeWxtbWIwMXVsMnZzMDd6NWZoZmZ2In0.MdezGukIHETIDNG-MYOeGQ</string>
+    <string name="mapbox_access_token" translatable="false">pk.eyJ1IjoiYW1pcm1pY3Jvem9uZSIsImEiOiJja2tkeWxtbWIwMXVsMnZzMDd6NWZoZmZ2In0.MdezGukIHETIDNG-MYOeGQ</string>
     <string name="current_location">current_location</string>
     <string name="tracking_enabled">tracking_enable</string>
     <string name="tracking_already_enabled">traking already enable</string>
+    <string name="user_location_permission_explanation">This app needs location permissions to show its functionality.</string>
+    <string name="user_location_permission_not_granted">You didn\'t grant location permissions.</string>
 </resources>

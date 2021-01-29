@@ -42,6 +42,13 @@ public class MainActivity extends AppCompatActivity {
 
             }
         });
+        findViewById(R.id.button2).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+                startActivity(new Intent(MainActivity.this, MainActivity3.class));
+            }
+        });
     }
 
     @Override
@@ -62,5 +69,6 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
+
 
 }
